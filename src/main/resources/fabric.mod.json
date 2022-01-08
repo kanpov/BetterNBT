@@ -1,0 +1,29 @@
+{
+    "schemaVersion": 1,
+    "id": "betternbt",
+    "version": "v1.0.0",
+    "name": "BetterNBT",
+    "description": "Gson-like NBT API for Fabric/1.18/Kotlin that allows streaming NBT data from & to a named data structure.",
+    "authors": [
+        "RedGrapefruit09"
+    ],
+    "contact": {
+        "website": "https://redgrapefruit09.github.io",
+        "repo": "https://github.com/RedGrapefruit09/BetterNBT"
+    },
+    "license": "MIT",
+    "environment": "*",
+    "entrypoints": {
+        "main": [
+            {
+                "adapter": "kotlin",
+                "value": "com.redgrapefruit.betternbt.ModInit"
+            }
+        ]
+    },
+    "mixins": [],
+    "depends": {
+        "fabricloader": ">=0.12.12",
+        "minecraft": "1.18.x"
+    }
+}

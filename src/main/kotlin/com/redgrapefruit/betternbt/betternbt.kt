@@ -34,14 +34,57 @@ internal fun assertDepth(depth: Int) {
 
 // Node Serializer API
 
+/**
+ * A [NodeSerializer] provides an interface for reading and writing a set data type from & to an NBT.
+ *
+ * There are several built-in [NodeSerializer]s provided by the library for:
+ *
+ * - [Byte]s
+ * - [Short]s
+ * - [Int]s
+ * - [Long]s
+ * - [Float]s
+ * - [Double]s
+ * - [String]s
+ * - [ByteArray]s
+ * - [IntArray]s
+ * - [Boolean]s
+ * - [java.util.UUID]s
+ *
+ * You **don't need a [NodeSerializer] if the type can be broken down into other nodes!**, e.g. is a _composite type_.
+ *
+ * If you are creating a custom [NodeSerializer], you must **register** it into the system with the [NodeSerializer.register]
+ * extension or the [registerNodeSerializer] function. There, you must also provide the [KClass] of the type that this [NodeSerializer]
+ * handles.
+ *
+ * It is preferred that custom [NodeSerializer]s are made into Kotlin `object`s for convenience.
+ */
 interface NodeSerializer<T : Any> {
-    fun readNbt(nbt: NbtCompound, key: String): T
+    /**
+     * Read the data from NBT into a given type.
+     *
+     * @return The decoded non-nullable type.
+     */
+    fun readNbt(
+        /** The NBT to read from. */
+        nbt: NbtCompound,
+        /** The key that has the data you're meant to read. */
+        key: String): T
 
-    fun writeNbt(nbt: NbtCompound, key: String, value: T)
+    /**
+     * Write the data from a runtime type to NBT.
+     */
+    fun writeNbt(
+        /** The NBT to write to. */
+        nbt: NbtCompound,
+        /** The key in the NBT you're meant to write to. */
+        key: String,
+        /** The value you need to write. */
+        value: T)
 
     companion object {
         private inline fun <reified T : Any> create(noinline r: NodeReadFunction<T>, noinline w: NodeWriteFunction<T>): NodeSerializer<T> {
-            val serializer = NodeSerializerImpl(r, w)
+            val serializer = BuiltinNodeSerializer(r, w)
             registerNodeSerializer(T::class, serializer)
             return serializer
         }
@@ -55,6 +98,9 @@ interface NodeSerializer<T : Any> {
             create(NbtCompound::getDouble, NbtCompound::putDouble)
             create(NbtCompound::getString, NbtCompound::putString)
             create(NbtCompound::getByteArray, NbtCompound::putByteArray)
+            create(NbtCompound::getIntArray, NbtCompound::putIntArray)
+            create(NbtCompound::getBoolean, NbtCompound::putBoolean)
+            create(NbtCompound::getUuid, NbtCompound::putUuid)
         }
     }
 }
@@ -70,7 +116,7 @@ internal fun <T : Any> NodeSerializer<T>.writeNbtUnsafe(nbt: NbtCompound, key: S
 private typealias NodeReadFunction<T> = (NbtCompound, String) -> T
 private typealias NodeWriteFunction<T> = (NbtCompound, String, T) -> Unit
 
-internal class NodeSerializerImpl<T : Any>(
+internal class BuiltinNodeSerializer<T : Any>(
     private val readFunction: NodeReadFunction<T>,
     private val writeFunction: NodeWriteFunction<T>
 ) : NodeSerializer<T> {
@@ -86,7 +132,25 @@ internal class NodeSerializerImpl<T : Any>(
 
 @PublishedApi internal val nodeSerializerRegistry: MutableMap<KClass<*>, NodeSerializer<*>> = mutableMapOf()
 
-inline fun <reified T : Any> registerNodeSerializer(clazz: KClass<T>, nodeSerializer: NodeSerializer<T>, shouldOverwrite: Boolean = false) {
+/**
+ * Registers a [NodeSerializer] into the system.
+ *
+ * In case you're trying to register a [NodeSerializer] for a type/[KClass] that already has one, there are two
+ * potential outcomes:
+ *
+ * - If the [shouldOverwrite] flag is set to `false` (which is by default), a warning will be logged into the console
+ * and the registering operation will be cancelled
+ * - If you set [shouldOverwrite] to `true`, a message notifying about overwriting will be logged, and the already
+ * existing [NodeSerializer] will be overwritten with the one you passed.
+ */
+fun <T : Any> registerNodeSerializer(
+    /** The [KClass] of the type that the [NodeSerializer] handles. */
+    clazz: KClass<T>,
+    /** The instance of the [NodeSerializer]. */
+    nodeSerializer: NodeSerializer<T>,
+    /** Determines the behavior if trying to register a duplicate [NodeSerializer]. See KDoc above for more details. */
+    shouldOverwrite: Boolean = false) {
+
     if (nodeSerializerRegistry.contains(clazz)) {
         if (shouldOverwrite) {
             betterNbtLogger.info("Overwriting an already existing NodeSerializer for ${clazz.fullName}.")
@@ -101,8 +165,24 @@ inline fun <reified T : Any> registerNodeSerializer(clazz: KClass<T>, nodeSerial
     nodeSerializerRegistry[clazz] = nodeSerializer
 }
 
-inline fun <reified T : Any> NodeSerializer<T>.register() {
-    registerNodeSerializer(T::class, this)
+/**
+ * An overload of [registerNodeSerializer] that uses the passed reified generic to determine the [KClass] of the
+ * [NodeSerializer]'s handled type.
+ */
+inline fun <reified T : Any> registerNodeSerializer(nodeSerializer: NodeSerializer<T>, shouldOverwrite: Boolean = false) {
+    registerNodeSerializer(T::class, nodeSerializer, shouldOverwrite)
+}
+
+/**
+ * An extension for [NodeSerializer] that registers it to the [KClass] of the passed generic.
+ *
+ * Calls [registerNodeSerializer] under the hood, see its KDoc for more.
+ */
+inline fun <reified T : Any> NodeSerializer<T>.register(
+    /** Overwrite behavior for scenarios where you're trying to register a duplicate [NodeSerializer]. */
+    shouldOverwrite: Boolean = false) {
+
+    registerNodeSerializer(T::class, this, shouldOverwrite)
 }
 
 inline val KClass<*>.fullName: String
@@ -110,10 +190,26 @@ inline val KClass<*>.fullName: String
 
 // Schema API
 
+/**
+ * A [Schema] contains a description of your NBT data, in 2 parts:
+ *
+ * - **Nodes** are regular fields/keys in the NBT, that are serialized with an associated [NodeSerializer].
+ * - **Sub-schemas** are [Schema]s nested in this [Schema], which are serialized by breaking them down with reflection.
+ *
+ * This description is inherently linked to a `class` or a `data class`, and for every node and sub-schema,
+ * a [KMutableProperty1] is held, which will be accessed and mutated to read and write the data according to this
+ * [Schema].
+ *
+ * **You cannot create [Schema]s yourself,** use the [KClass.schema] extension or the [createSchema] function.
+ */
 data class Schema internal constructor(
+    /** A map of node keys to their associated [NodeSerializer]s. */
     val nodes: Map<String, NodeSerializer<*>>,
+    /** A map of sub schema keys to the schemas themselves. */
     val schemas: Map<String, Schema>,
+    /** The linked reflection properties for every node in the [nodes] map. */
     val nodeLinks: Map<String, KMutableProperty1<*, *>>,
+    /** The linked sub-schema properties for every sub-schema in the [schemas] map. */
     val schemaLinks: Map<String, KMutableProperty1<*, *>>
 )
 
@@ -153,14 +249,28 @@ internal fun createSchemaInternal(clazz: KClass<*>, depth: Int = 1): Schema {
     return Schema(nodes, schemas, nodeLinks, schemaLinks)
 }
 
+/**
+ * Use this annotation on a `var`/mutable property in your schematic class (a class, from which a [Schema] is generated)
+ * to ignore this property as a node/sub-schema, e.g. it won't be serialized.
+ */
 @Target(AnnotationTarget.FIELD, AnnotationTarget.PROPERTY)
 @Retention(AnnotationRetention.RUNTIME)
 annotation class IgnoreInSchema
 
+/**
+ * Generates a [Schema] from this [KClass], for example:
+ *
+ * ```kotlin
+ * val mySchema = MyDataClass::class.schema()
+ * ```
+ */
 fun KClass<*>.schema(): Schema {
     return createSchemaInternal(this) ?: throw RuntimeException("Failed to generate schema for ${this.fullName}")
 }
 
+/**
+ * Generates a [Schema] from the [KClass] of the [T] reified generic.
+ */
 inline fun <reified T> createSchema(): Schema = T::class.schema()
 
 // Serialization Impl

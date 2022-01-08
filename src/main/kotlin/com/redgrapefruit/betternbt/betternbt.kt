@@ -319,7 +319,18 @@ inline fun <reified T> createSchema(): Schema = T::class.schema()
 
 // Core Serialization API
 
-inline fun <reified T : Any> useNbt(nbt: NbtCompound, schema: Schema, action: (T) -> Unit) {
+/**
+ * Provides an interface for the [Schema]-serialization API.
+ */
+inline fun <reified T : Any> useNbt(
+    /** The [NbtCompound] for I/O. */
+    nbt: NbtCompound,
+    /** The serialization [Schema], create with [KClass.schema] or [createSchema] */
+    schema: Schema,
+    /** The inlined lambda, in which you can operate on your data structure, everything will be read in from the [nbt]
+     *  before calling this lambda and any changes you make in it will be saved back to the [nbt]. */
+    action: (T) -> Unit) {
+
     val obj = T::class.createInstance()
 
     readFromNbt(nbt, schema, obj)
@@ -329,23 +340,43 @@ inline fun <reified T : Any> useNbt(nbt: NbtCompound, schema: Schema, action: (T
 
 @PublishedApi internal val schemaCache: MutableMap<KClass<out Any>, Schema> = mutableMapOf()
 
-inline fun <reified T : Any> useNbt(nbt: NbtCompound, action: (T) -> Unit) {
+/**
+ * An overload of [useNbt] that generates the [Schema] automatically from the reified generic's [KClass].
+ *
+ * The [Schema]s generated in this method are **cached** in a [MutableMap], meaning you won't have any performance
+ * impact over storing the [Schema] in a variable.
+ */
+inline fun <reified T : Any> useNbt(
+    /** The [NbtCompound] for I/O. */
+    nbt: NbtCompound,
+    /** The inlined lambda to operate on your data structure. */
+    action: (T) -> Unit) {
+
     val clazz = T::class
     if (!schemaCache.contains(clazz)) schemaCache[clazz] = clazz.schema()
 
     useNbt(nbt, schemaCache[clazz]!!, action)
 }
 
+/**
+ * A wrapper for the cached overload of [useNbt] as an extension to the [NbtCompound] class.
+ */
 inline fun <reified T : Any> NbtCompound.use(action: (T) -> Unit) {
     useNbt(this, action)
 }
 
 // Serialization Adapters (Items, etc.)
 
+/**
+ * A wrapper for the non-cached overload of [useNbt] as an [ItemStack] extension, which uses the [ItemStack]'s NBT.
+ */
 inline fun <reified T : Any> ItemStack.useNbt(schema: Schema, action: (T) -> Unit) {
     useNbt(orCreateNbt, schema, action)
 }
 
+/**
+ * An alternative to the overload above that uses the cached overload of [useNbt] instead.
+ */
 inline fun <reified T : Any> ItemStack.useNbt(action: (T) -> Unit) {
     useNbt(orCreateNbt, action)
 }

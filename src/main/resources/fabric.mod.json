@@ -13,14 +13,7 @@
     },
     "license": "MIT",
     "environment": "*",
-    "entrypoints": {
-        "main": [
-            {
-                "adapter": "kotlin",
-                "value": "com.redgrapefruit.betternbt.ModInit"
-            }
-        ]
-    },
+    "entrypoints": {},
     "mixins": [],
     "depends": {
         "fabricloader": ">=0.12.12",

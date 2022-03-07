@@ -1,7 +1,9 @@
 
-# BetterNBT
+# BetterNBT (experimental)
 
-A lightweight (under 250 lines of code) Kotlin library for [Fabric](https://fabricmc.net) 1.18.x that allows intuitively working
+**WARNING**: this library is still very much experimental, please prefer to use the [ItemNBT](https://github.com/RedGrapefruit09/ItemNBT) library for anything outside of testing.
+
+A lightweight (under 400 lines of code) Kotlin library for [Fabric](https://fabricmc.net) 1.18.x that allows intuitively working
 with Minecraft NBT by reading & writing to a custom data structure.
 
 ## Install
@@ -9,7 +11,7 @@ with Minecraft NBT by reading & writing to a custom data structure.
 **Step 1:** put this into your `gradle.properties`:
 
 ```properties
-better_nbt_version=v1.0.0
+better_nbt_version=v1.1.0
 ```
 
 **Step 2:** put this into your `build.gradle`:

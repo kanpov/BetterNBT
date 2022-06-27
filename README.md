@@ -9,7 +9,7 @@ with Minecraft NBT by reading & writing to a custom data structure.
 **Step 1:** put this into your `gradle.properties`:
 
 ```properties
-better_nbt_version=v1.0.0
+better_nbt_version=v1.2.0
 ```
 
 **Step 2:** put this into your `build.gradle`:
@@ -17,7 +17,7 @@ better_nbt_version=v1.0.0
 ```groovy
 repositories {
     maven {
-        url = "https://redgrapefruit09.github.io/maven"
+        url = "https://kanpov.github.io/maven"
         content {
             includeGroup "com.redgrapefruit.betternbt"
         }
